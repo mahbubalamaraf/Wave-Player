@@ -90,31 +90,28 @@ jobs:
             --warning-mode all \
             2>&1 | tee build-error.log
 
-      - name: Diagnose Build Failure
+      - name: Diagnose Kotlin Errors
         if: failure()
         shell: bash
         run: |
+          LOG="wave-source/build-error.log"
+
           {
-            echo "## Wave APK Build Failure"
+            echo "## Wave Kotlin Build Diagnosis"
             echo ""
-            echo "### Error details"
-            echo '```text'
 
-            if [ -f wave-source/build-error.log ]; then
-              MATCHES=$(grep -i -E \
-                'What went wrong|Execution failed|Caused by:|error:|Could not resolve|Could not find|Compilation error|FAILURE:' \
-                wave-source/build-error.log | tail -n 60 || true)
+            if [ -f "$LOG" ]; then
+              echo "### Compilation Errors"
+              echo '```text'
 
-              if [ -n "$MATCHES" ]; then
-                echo "$MATCHES"
-              else
-                tail -n 100 wave-source/build-error.log
-              fi
+              grep -n -i -E \
+                '(^e: |^e:|error:|unresolved reference|overload resolution ambiguity|type mismatch|cannot access|expecting |conflicting overloads|redeclaration|compilation error|What went wrong|Caused by:)' \
+                "$LOG" | tail -n 120 || true
+
+              echo '```'
             else
               echo "Build log not found."
             fi
-
-            echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload APK
