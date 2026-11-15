@@ -1,0 +1,76 @@
+name: Build APK From ZIP
+
+on:
+  push:
+    paths:
+      - 'Wave-2.8.123-no-effects.zip'
+      - '.github/workflows/zip-build.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Extract ZIP
+        run: |
+          mkdir -p "$RUNNER_TEMP/unpacked"
+          unzip -q Wave-2.8.123-no-effects.zip -d "$RUNNER_TEMP/unpacked"
+
+          PROJECT=$(find "$RUNNER_TEMP/unpacked" -name gradlew -type f | head -n 1)
+
+          if [ -z "$PROJECT" ]; then
+            echo "Gradle project not found in ZIP"
+            exit 1
+          fi
+
+          mkdir -p wave-source
+          cp -a "$(dirname "$PROJECT")/." wave-source/
+          chmod +x wave-source/gradlew
+
+      - name: Setup Android Build
+        uses: ./wave-source/.github/actions/setup
+
+      - name: Set Version
+        run: |
+          echo "VC=$((${{ github.run_number }} + 100))" >> $GITHUB_ENV
+          echo "VER=2.8.$((${{ github.run_number }} + 100))" >> $GITHUB_ENV
+
+      - name: Setup Keystore
+        env:
+          KS: ${{ secrets.KEYSTORE_BASE64 }}
+          STORE: ${{ secrets.KEYSTORE_PASSWORD }}
+          ALIAS: ${{ secrets.KEY_ALIAS }}
+          PASS: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          if [ -n "$KS" ]; then
+            echo "$KS" | base64 -d > wave-source/keystore.jks
+
+            {
+              echo "storeFile=keystore.jks"
+              echo "storePassword=$STORE"
+              echo "keyAlias=$ALIAS"
+              echo "keyPassword=$PASS"
+            } > wave-source/keystore.properties
+          fi
+
+      - name: Build APK
+        working-directory: wave-source
+        run: |
+          ./gradlew :app:assembleDev \
+            -Pvc=$VC -Pvn=$VER --stacktrace
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Wave-APK
+          path: wave-source/app/build/outputs/apk/dev/app-universal-dev.apk
+          if-no-files-found: error
+          retention-days: 30
