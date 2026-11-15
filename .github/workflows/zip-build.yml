@@ -3,7 +3,7 @@ name: Build APK From ZIP
 on:
   push:
     branches:
-      - master
+      - main
     paths:
       - 'Wave-2.8.123-no-effects.zip'
       - '.github/workflows/zip-build.yml'
@@ -76,7 +76,6 @@ jobs:
           fi
 
       - name: Build APK
-        id: build
         working-directory: wave-source
         shell: bash
         run: |
