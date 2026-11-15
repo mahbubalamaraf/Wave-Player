@@ -37,7 +37,7 @@ jobs:
           PROJECT=$(find extracted -type f -name gradlew | head -n 1)
 
           if [ -z "$PROJECT" ]; then
-            echo "ERROR: Gradle project not found!"
+            echo "::error::Gradle project not found in ZIP"
             exit 1
           fi
 
@@ -45,7 +45,7 @@ jobs:
           cp -a "$PROJECT_ROOT/." wave-source/
           chmod +x wave-source/gradlew
 
-          echo "Project extracted successfully"
+          echo "ZIP extracted successfully"
 
       - name: Setup Android Build
         uses: ./wave-source/.github/actions/setup
@@ -76,6 +76,7 @@ jobs:
           fi
 
       - name: Build APK
+        id: build
         working-directory: wave-source
         shell: bash
         run: |
@@ -88,6 +89,33 @@ jobs:
             --info \
             --warning-mode all \
             2>&1 | tee build-error.log
+
+      - name: Diagnose Build Failure
+        if: failure()
+        shell: bash
+        run: |
+          {
+            echo "## Wave APK Build Failure"
+            echo ""
+            echo "### Error details"
+            echo '```text'
+
+            if [ -f wave-source/build-error.log ]; then
+              MATCHES=$(grep -i -E \
+                'What went wrong|Execution failed|Caused by:|error:|Could not resolve|Could not find|Compilation error|FAILURE:' \
+                wave-source/build-error.log | tail -n 60 || true)
+
+              if [ -n "$MATCHES" ]; then
+                echo "$MATCHES"
+              else
+                tail -n 100 wave-source/build-error.log
+              fi
+            else
+              echo "Build log not found."
+            fi
+
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload APK
         if: success()
